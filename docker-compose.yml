@@ -1,0 +1,55 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Grid Intelligence Platform — docker-compose
+#
+# Default profile: producer only (streaming path demo / local dev)
+# Orchestration profile: adds Airflow for the portable batch variant (T5-4)
+#
+# Usage:
+#   docker compose up                           # producer only
+#   docker compose --profile orchestration up   # producer + Airflow
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  producer:
+    build:
+      context: .
+      dockerfile: streaming/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    environment:
+      PRODUCER_INTERVAL_SECONDS: ${PRODUCER_INTERVAL_SECONDS:-5}
+      GRID_REGION: ${GRID_REGION:-ERCOT}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost',8080))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  airflow:
+    image: apache/airflow:2.9.3-python3.12
+    env_file: .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY:-change-me-in-prod}
+    volumes:
+      - ./orchestration/airflow/dags:/opt/airflow/dags:ro
+      - airflow_logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    command: standalone
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    profiles:
+      - orchestration
+
+volumes:
+  airflow_logs:

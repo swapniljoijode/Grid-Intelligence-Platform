@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-log.txt
+pip-wheel-metadata/
+
+# Environment — never commit secrets
+.env
+!.env.example
+
+# dbt
+transform/dbt/target/
+transform/dbt/dbt_packages/
+transform/dbt/logs/
+
+# Coverage and test artefacts
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+junit.xml
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# Docker volumes
+orchestration/airflow/logs/
+orchestration/airflow/plugins/
+
+# MkDocs generated site
+site/
+
+# detect-secrets regenerated baseline (keep the committed baseline)
+# .secrets.baseline tracked intentionally

@@ -1,0 +1,45 @@
+name: grid_intelligence
+version: "1.0.0"
+config-version: 2
+
+profile: grid_intelligence
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# ── Fabric Warehouse constraints ─────────────────────────────────────────────
+# - No traditional indexes (ignored by adapter).
+# - No nested CTEs in materialized models — use staging views instead.
+# - Supported incremental strategies: merge, microbatch.
+# - table is the default materialization for gold; view for silver staging.
+
+models:
+  grid_intelligence:
+    silver:
+      +schema: silver
+      +materialized: view
+      +tags: ["silver"]
+    gold:
+      dimensions:
+        +schema: gold
+        +materialized: table
+        +tags: ["gold", "dimension"]
+      facts:
+        +schema: gold
+        +materialized: table
+        +tags: ["gold", "fact"]
+
+vars:
+  ercot_start_date: "2023-01-01"
+  carbon_intensity_region: "national"
+  open_meteo_latitude: 30.2672      # Austin, TX (ERCOT proxy)
+  open_meteo_longitude: -97.7431

@@ -1,0 +1,41 @@
+name: Tracker Sync
+
+# Upserts tracker_tasks.yaml into the project tracker datastore on every
+# change to main. Idempotent — safe to re-run. Wire the sync step in T6.
+
+on:
+  push:
+    paths:
+      - "tracker_tasks.yaml"
+    branches: [main]
+
+jobs:
+  sync:
+    name: Sync tracker tasks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate YAML schema
+        run: |
+          python - <<'EOF'
+          import yaml, sys
+          with open("tracker_tasks.yaml") as f:
+              doc = yaml.safe_load(f)
+          assert "version" in doc, "missing 'version'"
+          assert "phases" in doc, "missing 'phases'"
+          for phase in doc["phases"]:
+              assert "id" in phase and "tasks" in phase, f"malformed phase: {phase}"
+              for task in phase["tasks"]:
+                  assert "id" in task and "title" in task, f"malformed task: {task}"
+          print(f"Valid — {sum(len(p['tasks']) for p in doc['phases'])} tasks across {len(doc['phases'])} phases.")
+          EOF
+
+      - name: Sync to tracker API
+        # TODO (T6): replace with real tracker CLI/API call, e.g.:
+        #   tracker upsert --file tracker_tasks.yaml --project grid-intelligence-platform
+        run: echo "Tracker sync placeholder — wire tracker CLI in T6."

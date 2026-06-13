@@ -1,0 +1,47 @@
+repos:
+  # ── Standard hygiene ────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]       # allow custom YAML tags (dbt profiles)
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-merge-conflict
+      - id: detect-private-key  # baseline guard before detect-secrets
+
+  # ── Secret scanning ─────────────────────────────────────────────────────────
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: |
+          (?x)^(
+            \.env\.example|
+            docs/.*|
+            .*\.md
+          )$
+
+  # ── Python linting and formatting (ruff) ────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.3
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # ── SQL linting (sqlfluff — T-SQL for Fabric Warehouse) ─────────────────────
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.1.1
+    hooks:
+      - id: sqlfluff-lint
+        args: [--dialect, tsql]
+        files: ^transform/dbt/models/.*\.sql$
+        additional_dependencies:
+          - sqlfluff-templater-dbt
+          - dbt-fabric

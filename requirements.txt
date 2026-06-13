@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Grid Intelligence Platform — Python dependencies
+# Install: pip install -r requirements.txt
+# ─────────────────────────────────────────────────────────────────────────────
+
+# HTTP and resilience
+requests==2.32.3
+tenacity==9.0.0
+
+# Data validation and contracts
+pydantic==2.8.2
+pydantic-settings==2.3.4
+
+# Environment
+python-dotenv==1.0.1
+
+# Data processing
+pandas==2.2.2
+
+# Azure SDK
+azure-identity==1.17.1
+azure-keyvault-secrets==4.8.0
+azure-eventhub==5.12.2
+
+# dbt — local execution against Fabric Warehouse
+# Requires: ODBC Driver 18 for SQL Server
+dbt-core==1.8.4
+dbt-fabric==1.8.4
+
+# Data quality
+great-expectations==0.18.19
+
+# Testing
+pytest==8.3.2
+pytest-cov==5.0.0
+
+# Code quality (also enforced via pre-commit)
+ruff==0.5.3
+sqlfluff==3.1.1
+pre-commit==3.7.1

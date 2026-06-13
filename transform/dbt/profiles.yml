@@ -1,0 +1,37 @@
+# dbt profiles — TEMPLATE. Copy to ~/.dbt/profiles.yml and fill in values.
+# Do NOT commit a populated profiles.yml — secrets belong in Key Vault.
+#
+# Requires: ODBC Driver 18 for SQL Server
+# Install on Debian/Ubuntu: apt-get install unixodbc-dev
+# Install driver: https://learn.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server
+
+grid_intelligence:
+  target: dev
+  outputs:
+    dev:
+      type: fabric
+      driver: "ODBC Driver 18 for SQL Server"
+      server: "{{ env_var('FABRIC_SERVER') }}"
+      port: 1433
+      database: "{{ env_var('FABRIC_DATABASE') }}"
+      schema: dbt_dev
+      authentication: CLI          # uses DefaultAzureCredential locally
+      encrypt: true
+      trust_cert: false
+      threads: 4
+      connect_retries: 3
+      connect_retry_delay: 5
+
+    prod:
+      type: fabric
+      driver: "ODBC Driver 18 for SQL Server"
+      server: "{{ env_var('FABRIC_SERVER') }}"
+      port: 1433
+      database: "{{ env_var('FABRIC_DATABASE') }}"
+      schema: gold
+      authentication: CLI
+      encrypt: true
+      trust_cert: false
+      threads: 8
+      connect_retries: 3
+      connect_retry_delay: 5

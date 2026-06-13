@@ -1,0 +1,61 @@
+version: 2
+
+sources:
+  - name: bronze_eia
+    schema: bronze
+    description: "Raw EIA Open Data API v2 responses — partitioned by load date."
+    freshness:
+      warn_after: {count: 2, period: hour}
+      error_after: {count: 6, period: hour}
+    loaded_at_field: _ingested_at
+    tables:
+      - name: eia_demand_raw
+        description: "Hourly electricity demand by balancing authority (ERCOT and others)."
+        columns:
+          - name: period
+            description: "ISO-8601 hour string from the EIA response."
+          - name: respondent
+            description: "Balancing authority code, e.g. ERCO."
+          - name: value
+            description: "Demand in megawatt-hours."
+      - name: eia_generation_raw
+        description: "Hourly generation by fuel type and balancing authority."
+        columns:
+          - name: period
+          - name: respondent
+          - name: fueltype
+          - name: value
+
+  - name: bronze_carbon
+    schema: bronze
+    description: "Raw UK Carbon Intensity API responses — half-hourly."
+    freshness:
+      warn_after: {count: 1, period: hour}
+      error_after: {count: 3, period: hour}
+    loaded_at_field: _ingested_at
+    tables:
+      - name: carbon_intensity_raw
+        description: "Half-hourly carbon intensity, index, and generation mix for Great Britain."
+        columns:
+          - name: "from"
+            description: "Period start in UTC ISO-8601."
+          - name: to
+          - name: intensity_actual
+          - name: intensity_forecast
+          - name: intensity_index
+
+  - name: bronze_weather
+    schema: bronze
+    description: "Raw Open-Meteo hourly weather observations."
+    freshness:
+      warn_after: {count: 2, period: hour}
+      error_after: {count: 6, period: hour}
+    loaded_at_field: _ingested_at
+    tables:
+      - name: weather_raw
+        description: "Hourly temperature (°C), wind speed (m/s), and precipitation (mm)."
+        columns:
+          - name: time
+          - name: temperature_2m
+          - name: wind_speed_10m
+          - name: precipitation
