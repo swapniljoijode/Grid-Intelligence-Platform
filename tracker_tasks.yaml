@@ -12,129 +12,177 @@ phases:
     tasks:
       - id: T0-1
         title: Activate Fabric trial capacity and record expiry date (East-US, Trial End Date: 2026-08-12)
+        status: done
       - id: T0-2
         title: Create dev, test, and prod via Deployment Pipelines
+        status: pending
       - id: T0-3
-        title: Connect Fabric Git integration and scaffold repository skeleton
+        title: Scaffold repository skeleton and document Fabric item deployment via REST API
+        status: done
       - id: T0-4
         title: Define naming conventions and branching strategy
+        status: done
       - id: T0-5
         title: Provision Key Vault and document secrets handling
+        status: done
       - id: T0-6
         title: Draw architecture diagram and seed theory companion
+        status: done
       - id: T0-7
         title: Define data contract and business questions
+        status: done
       - id: T0-8
         title: Enable Capacity Metrics app for cost monitoring
+        status: pending
 
   - id: T1
     name: Batch Ingestion to Bronze
     tasks:
       - id: T1-1
         title: Build EIA batch loader into bronze
+        status: done
       - id: T1-2
         title: Build Carbon Intensity history loader into bronze
+        status: done
       - id: T1-3
         title: Build Open-Meteo weather loader into bronze
+        status: done
       - id: T1-4
         title: Implement watermarking and offset pagination
+        status: done
       - id: T1-5
         title: Implement idempotent incremental loads
+        status: done
       - id: T1-6
         title: Validate payloads against pydantic contracts
+        status: done
 
   - id: T2
     name: Real-Time Ingestion and Alerting
     tasks:
       - id: T2-1
         title: Build Dockerised event producer with telemetry and polled readings
+        status: done
       - id: T2-2
         title: Create Eventstream and route to Eventhouse
+        status: done
       - id: T2-3
         title: Build Real-Time Dashboard on Eventhouse
+        status: done
       - id: T2-4
         title: Configure Activator alert on a threshold
+        status: done
       - id: T2-5
         title: Document KQL monitoring queries
+        status: done
 
   - id: T3
     name: Transformation and Dimensional Modelling
     tasks:
       - id: T3-1
         title: Spark silver layer — cleanse, conform, and deduplicate
+        status: pending
       - id: T3-2
         title: Implement slowly changing dimensions
+        status: pending
       - id: T3-3
         title: Build gold star schema with dbt-fabric
+        status: pending
       - id: T3-4
         title: Configure materializations within Fabric constraints
+        status: pending
       - id: T3-5
         title: Add stored procedures for set-based maintenance
+        status: pending
       - id: T3-6
         title: Add dbt tests and Great Expectations quality gates
+        status: pending
 
   - id: T4
     name: Governance, Lineage, Quality, and Security
     tasks:
       - id: T4-1
         title: Apply sensitivity labels and build business glossary in Purview
+        status: pending
       - id: T4-2
         title: Implement Row-Level Security in Warehouse and semantic model
+        status: pending
       - id: T4-3
         title: Configure OneLake security
+        status: pending
       - id: T4-4
         title: Add dbt source freshness and Monitoring Hub observability
+        status: pending
       - id: T4-5
         title: Enforce data contracts at layer transitions
+        status: pending
 
   - id: T5
     name: Orchestration
     tasks:
       - id: T5-1
         title: Build end-to-end Data Factory orchestration
+        status: pending
       - id: T5-2
         title: Coordinate batch and streaming paths
+        status: pending
       - id: T5-3
         title: Add retries, failure alerting, and run logging
+        status: pending
       - id: T5-4
         title: Prepare Airflow in Docker as the portable variant
+        status: pending
 
   - id: T6
     name: CI/CD, Version Control, and Containerisation
     tasks:
       - id: T6-1
         title: Build GitHub Actions pipeline — lint, dbt build and test, quality, deploy
+        status: done
       - id: T6-2
         title: Add pre-commit hooks with secret scanning
+        status: done
       - id: T6-3
         title: Build Docker images for producer and dbt runtime
+        status: done
       - id: T6-4
         title: Configure branching, conventional commits, and semantic tags
+        status: done
       - id: T6-5
         title: Wire Deployment Pipelines promotion
+        status: pending
 
   - id: T7
     name: Analytics and Visualisation
     tasks:
       - id: T7-1
         title: Build Power BI semantic model on DirectLake
+        status: pending
       - id: T7-2
         title: Build executive dashboard — branded and KPI-led
+        status: pending
       - id: T7-3
         title: Finalise the live Real-Time Dashboard
+        status: done
       - id: T7-4
         title: Validate every visual against a business question
+        status: pending
 
   - id: T8
     name: Documentation, Packaging, and Decommission
     tasks:
       - id: T8-1
         title: Finalise theory companion, data dictionary, README, and runbook
+        status: pending
       - id: T8-2
         title: Record walkthrough and capture screenshots
+        status: pending
       - id: T8-3
         title: Draft CAR resume bullets and LinkedIn content
+        status: pending
       - id: T8-4
         title: Export OneLake data and dbt artifacts
+        status: pending
       - id: T8-5
         title: Pause or delete trial capacity and confirm cost stop
+        status: pending
