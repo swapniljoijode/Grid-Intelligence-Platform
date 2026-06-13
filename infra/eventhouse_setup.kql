@@ -1,0 +1,67 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Grid Intelligence Platform — Eventhouse (KQL Database) Setup
+// Phase T2-2 | Run these commands in the Eventhouse query editor in Fabric.
+//
+// Prerequisites:
+//   1. A Fabric workspace with an active capacity (trial or F SKU).
+//   2. An Eventhouse item created in the workspace (New → Eventhouse).
+//   3. A KQL database created inside the Eventhouse.
+//
+// Run the sections below in order.
+// ─────────────────────────────────────────────────────────────────────────────
+
+
+// ── 1. Main events table ─────────────────────────────────────────────────────
+
+.create-merge table GridEvents (
+    event_id:                  string,
+    region:                    string,
+    timestamp:                 datetime,
+    demand_mw:                 real,
+    generation_mw:             real,
+    carbon_intensity_gco2_kwh: real,
+    source:                    string
+)
+
+// ── 2. JSON ingestion mapping (matches GridEvent pydantic model fields) ───────
+
+.create-or-alter table GridEvents ingestion json mapping 'GridEventsMapping'
+'['
+'  {"column":"event_id",                  "path":"$.event_id",                  "datatype":"string"},'
+'  {"column":"region",                    "path":"$.region",                    "datatype":"string"},'
+'  {"column":"timestamp",                 "path":"$.timestamp",                 "datatype":"datetime"},'
+'  {"column":"demand_mw",                 "path":"$.demand_mw",                 "datatype":"real"},'
+'  {"column":"generation_mw",             "path":"$.generation_mw",             "datatype":"real"},'
+'  {"column":"carbon_intensity_gco2_kwh", "path":"$.carbon_intensity_gco2_kwh", "datatype":"real"},'
+'  {"column":"source",                    "path":"$.source",                    "datatype":"string"}'
+']'
+
+// ── 3. Retention policy — 90 days for dev ────────────────────────────────────
+
+.alter table GridEvents policy retention
+'{"SoftDeletePeriod": "90.00:00:00", "Recoverability": "Enabled"}'
+
+// ── 4. Materialized view — 5-minute aggregates (for the Real-Time Dashboard) ─
+// backfill=true processes data already in the table when the view is created.
+
+.create materialized-view with (backfill=true) GridEventsFiveMin on table GridEvents
+{
+    GridEvents
+    | summarize
+        avg_demand_mw             = avg(demand_mw),
+        max_demand_mw             = max(demand_mw),
+        avg_carbon_intensity      = avg(carbon_intensity_gco2_kwh),
+        max_carbon_intensity      = max(carbon_intensity_gco2_kwh),
+        event_count               = count()
+      by region, source, bin(timestamp, 5m)
+}
+
+// ── 5. Verify setup ──────────────────────────────────────────────────────────
+
+.show tables
+| where TableName in ("GridEvents")
+
+.show table GridEvents ingestion mappings
+
+GridEvents
+| count

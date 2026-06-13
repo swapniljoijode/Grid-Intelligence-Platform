@@ -4,9 +4,10 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install only the producer's runtime dependencies
+# Install only the producer's runtime dependencies (no dbt, no GE)
 RUN pip install --no-cache-dir \
     requests==2.32.3 \
     tenacity==9.0.0 \
@@ -21,7 +22,9 @@ COPY ingestion/contracts/ ./ingestion/contracts/
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import streaming.producer; print('ok')" || exit 1
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
 
 CMD ["python", "-m", "streaming.producer"]
