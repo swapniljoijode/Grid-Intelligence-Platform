@@ -24,6 +24,9 @@ transform/dbt/target/
 transform/dbt/dbt_packages/
 transform/dbt/logs/
 
+# Watermark files (local dev only — pipeline passes dates explicitly in Fabric)
+.watermarks/
+
 # Coverage and test artefacts
 .coverage
 coverage.xml
