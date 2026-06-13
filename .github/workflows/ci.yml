@@ -110,3 +110,33 @@ jobs:
         with:
           name: dbt-docs
           path: transform/dbt/target/
+
+  # ── 6. Fabric REST deploy (main only — replaces Git integration) ──────────
+  # Upserts PySpark notebooks from transform/spark/ into the Fabric workspace.
+  # Skipped automatically on PRs and forks (no FABRIC_WORKSPACE_ID secret).
+  # Add FABRIC_WORKSPACE_ID to repo secrets to activate.
+  fabric-deploy:
+    name: Deploy to Fabric
+    runs-on: ubuntu-latest
+    needs: [lint-python, pytest]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.FABRIC_WORKSPACE_ID != ''
+    env:
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      FABRIC_WORKSPACE_ID: ${{ vars.FABRIC_WORKSPACE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install deploy dependencies
+        run: pip install requests azure-identity
+      - name: Dry-run on PR / feature branches (sanity check)
+        run: python infra/fabric_deploy.py --workspace-id "$FABRIC_WORKSPACE_ID" --dry-run
+      - name: Deploy notebooks to Fabric workspace
+        run: python infra/fabric_deploy.py --workspace-id "$FABRIC_WORKSPACE_ID"
