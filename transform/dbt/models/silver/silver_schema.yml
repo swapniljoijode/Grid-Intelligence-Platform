@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: stg_demand
+    description: "Staging view over Silver demand — adds surrogate key and date parts."
+    columns:
+      - name: demand_key
+        description: "MD5 surrogate key on (period_utc, respondent)."
+        tests: [not_null, unique]
+      - name: period_utc
+        tests: [not_null]
+      - name: respondent
+        tests: [not_null]
+      - name: demand_mwh
+        tests: [not_null]
+
+  - name: stg_generation
+    description: "Staging view over Silver generation — adds surrogate key and fuel label."
+    columns:
+      - name: generation_key
+        description: "MD5 surrogate key on (period_utc, respondent, fuel_type)."
+        tests: [not_null, unique]
+      - name: period_utc
+        tests: [not_null]
+      - name: respondent
+        tests: [not_null]
+      - name: fuel_type
+        tests: [not_null]
+      - name: generation_mwh
+        tests: [not_null]
+
+  - name: stg_carbon_intensity
+    description: "Staging view over Silver carbon intensity — adds surrogate key."
+    columns:
+      - name: carbon_intensity_key
+        description: "MD5 surrogate key on (period_from, period_to)."
+        tests: [not_null, unique]
+      - name: period_from
+        tests: [not_null]
+      - name: period_to
+        tests: [not_null]
+      - name: intensity_gco2_kwh
+        tests: [not_null]

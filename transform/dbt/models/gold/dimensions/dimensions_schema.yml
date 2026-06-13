@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: "Date spine from ercot_start_date through today + 1 year."
+    columns:
+      - name: date_key
+        description: "Integer surrogate key in YYYYMMDD format."
+        tests: [not_null, unique]
+      - name: date_day
+        tests: [not_null, unique]
+      - name: year
+        tests: [not_null]
+      - name: month
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1,2,3,4,5,6,7,8,9,10,11,12]
+      - name: day_of_week
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1,2,3,4,5,6,7]
+
+  - name: dim_region
+    description: "Static region/balancing authority dimension."
+    columns:
+      - name: region_key
+        tests: [not_null, unique]
+      - name: respondent_code
+        tests: [not_null, unique]
+      - name: country
+        tests: [not_null]
+
+  - name: dim_fuel_type
+    description: "EIA fuel type dimension with carbon intensity benchmarks."
+    columns:
+      - name: fuel_type_key
+        tests: [not_null, unique]
+      - name: fuel_type_code
+        tests: [not_null, unique]
+      - name: typical_co2_gco2_kwh
+        tests: [not_null]

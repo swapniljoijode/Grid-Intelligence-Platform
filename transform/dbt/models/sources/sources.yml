@@ -1,23 +1,27 @@
 version: 2
 
 sources:
+  # ── Bronze Lakehouse — via SQL Analytics Endpoint ─────────────────────────
   - name: bronze_eia
-    schema: bronze
-    description: "Raw EIA Open Data API v2 responses — partitioned by load date."
+    database: bronze-lakehouse
+    schema: dbo
+    description: "Raw EIA Open Data API v2 responses — partitioned by load_date."
     freshness:
       warn_after: {count: 2, period: hour}
       error_after: {count: 6, period: hour}
     loaded_at_field: _ingested_at
     tables:
       - name: eia_demand_raw
-        description: "Hourly electricity demand by balancing authority (ERCOT and others)."
+        description: "Hourly electricity demand by balancing authority (ERCOT)."
         columns:
           - name: period
-            description: "ISO-8601 hour string from the EIA response."
+            description: "EIA period string e.g. 2024-01-15T13."
           - name: respondent
-            description: "Balancing authority code, e.g. ERCO."
+            description: "Balancing authority code e.g. ERCO."
           - name: value
             description: "Demand in megawatt-hours."
+          - name: _ingested_at
+            description: "UTC ISO-8601 timestamp when the row was written to bronze."
       - name: eia_generation_raw
         description: "Hourly generation by fuel type and balancing authority."
         columns:
@@ -25,9 +29,11 @@ sources:
           - name: respondent
           - name: fueltype
           - name: value
+          - name: _ingested_at
 
   - name: bronze_carbon
-    schema: bronze
+    database: bronze-lakehouse
+    schema: dbo
     description: "Raw UK Carbon Intensity API responses — half-hourly."
     freshness:
       warn_after: {count: 1, period: hour}
@@ -35,27 +41,63 @@ sources:
     loaded_at_field: _ingested_at
     tables:
       - name: carbon_intensity_raw
-        description: "Half-hourly carbon intensity, index, and generation mix for Great Britain."
+        description: "Half-hourly carbon intensity and index for Great Britain."
         columns:
-          - name: "from"
-            description: "Period start in UTC ISO-8601."
+          - name: from
           - name: to
           - name: intensity_actual
           - name: intensity_forecast
           - name: intensity_index
+          - name: _ingested_at
 
   - name: bronze_weather
-    schema: bronze
-    description: "Raw Open-Meteo hourly weather observations."
+    database: bronze-lakehouse
+    schema: dbo
+    description: "Raw Open-Meteo hourly weather observations — Austin, TX."
     freshness:
       warn_after: {count: 2, period: hour}
       error_after: {count: 6, period: hour}
     loaded_at_field: _ingested_at
     tables:
       - name: weather_raw
-        description: "Hourly temperature (°C), wind speed (m/s), and precipitation (mm)."
+        description: "Hourly temperature (°C), wind speed (m/s), precipitation (mm)."
         columns:
           - name: time
           - name: temperature_2m
           - name: wind_speed_10m
           - name: precipitation
+          - name: _ingested_at
+
+  # ── Silver Lakehouse — via SQL Analytics Endpoint ─────────────────────────
+  - name: silver
+    database: silver-lakehouse
+    schema: dbo
+    description: "Cleansed, conformed, deduplicated Silver layer written by PySpark notebooks."
+    tables:
+      - name: demand
+        description: "Hourly ERCOT demand — parsed timestamps, deduped by (period_utc, respondent)."
+        columns:
+          - name: period_utc
+          - name: respondent
+          - name: demand_mwh
+          - name: demand_mw
+          - name: _cleansed_at
+      - name: generation
+        description: "Hourly ERCOT generation by fuel type."
+        columns:
+          - name: period_utc
+          - name: respondent
+          - name: fuel_type
+          - name: fuel_type_label
+          - name: generation_mwh
+          - name: _cleansed_at
+      - name: carbon_intensity
+        description: "Half-hourly GB carbon intensity — actual preferred over forecast."
+        columns:
+          - name: period_from
+          - name: period_to
+          - name: intensity_gco2_kwh
+          - name: intensity_index
+          - name: is_estimated
+          - name: duration_minutes
+          - name: _cleansed_at
