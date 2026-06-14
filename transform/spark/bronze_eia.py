@@ -38,13 +38,16 @@ PAGE_SIZE = 5_000
 def _http_get(url: str, params: dict, max_attempts: int = 5) -> dict:
     for attempt in range(max_attempts):
         try:
-            resp = requests.get(url, params=params, timeout=30)
+            resp = requests.get(url, params=params, timeout=90)
             resp.raise_for_status()
             return resp.json()
-        except requests.HTTPError:
+        except (requests.HTTPError, requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError) as exc:
             if attempt == max_attempts - 1:
                 raise
-            time.sleep(min(2 ** attempt, 30))
+            wait = min(2 ** attempt, 30)
+            log.warning("Attempt %d failed (%s) — retrying in %ds", attempt + 1, exc, wait)
+            time.sleep(wait)
     raise RuntimeError("unreachable")
 
 
