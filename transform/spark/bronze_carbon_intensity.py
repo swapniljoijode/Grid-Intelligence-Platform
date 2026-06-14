@@ -4,27 +4,17 @@
 #
 # Fetches UK Carbon Intensity API (half-hourly, 14-day chunks), appends to
 # Bronze Delta table partitioned by load_date, advances watermark.
+# Dependencies: requests, pandas — both pre-installed in Fabric PySpark runtime.
 
 import logging
 import os
-import subprocess
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-subprocess.run(
-    ["pip", "install", "--quiet", "requests==2.32.3", "tenacity==9.0.0"],
-    check=True,
-)
-
-import requests  # noqa: E402
-from tenacity import (  # noqa: E402
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-import pandas as pd  # noqa: E402
-from pyspark.sql import SparkSession  # noqa: E402
+import requests
+import pandas as pd
+from pyspark.sql import SparkSession
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -34,15 +24,17 @@ CI_BASE = "https://api.carbonintensity.org.uk"
 CHUNK_DAYS = 14
 
 
-@retry(
-    retry=retry_if_exception_type(requests.HTTPError),
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
-)
-def _http_get(url: str) -> dict:
-    resp = requests.get(url, headers={"Accept": "application/json"}, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+def _http_get(url: str, max_attempts: int = 5) -> dict:
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.get(url, headers={"Accept": "application/json"}, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.HTTPError:
+            if attempt == max_attempts - 1:
+                raise
+            time.sleep(min(2 ** attempt, 30))
+    raise RuntimeError("unreachable")
 
 
 def _fmt(dt: datetime) -> str:
@@ -54,8 +46,7 @@ def fetch_intensity(from_dt: datetime, to_dt: datetime) -> list[dict]:
     cursor = from_dt
     while cursor < to_dt:
         chunk_end = min(cursor + timedelta(days=CHUNK_DAYS), to_dt)
-        url = f"{CI_BASE}/intensity/{_fmt(cursor)}/{_fmt(chunk_end)}"
-        data = _http_get(url).get("data", [])
+        data = _http_get(f"{CI_BASE}/intensity/{_fmt(cursor)}/{_fmt(chunk_end)}").get("data", [])
         rows.extend(data)
         cursor = chunk_end
     return rows
@@ -82,33 +73,27 @@ def _save_wm(value: str) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 now = datetime.now(timezone.utc)
 wm = _load_wm()
-
-if wm:
-    from_dt = datetime.fromisoformat(wm.replace("Z", "+00:00"))
-else:
-    from_dt = now - timedelta(hours=48)
-
-to_dt = now
+from_dt = datetime.fromisoformat(wm.replace("Z", "+00:00")) if wm else now - timedelta(hours=48)
 ingested_at = now.isoformat()
 load_date = now.strftime("%Y-%m-%d")
 
-log.info("Fetching CI from %s to %s", _fmt(from_dt), _fmt(to_dt))
-rows = fetch_intensity(from_dt, to_dt)
+log.info("Fetching CI from %s to %s", _fmt(from_dt), _fmt(now))
+rows = fetch_intensity(from_dt, now)
 log.info("Fetched %d CI records", len(rows))
 
 if rows:
-    records = []
-    for item in rows:
-        intensity = item.get("intensity", {})
-        records.append({
+    records = [
+        {
             "from": item.get("from"),
             "to": item.get("to"),
-            "intensity_forecast": intensity.get("forecast"),
-            "intensity_actual": intensity.get("actual"),
-            "intensity_index": intensity.get("index"),
+            "intensity_forecast": item.get("intensity", {}).get("forecast"),
+            "intensity_actual": item.get("intensity", {}).get("actual"),
+            "intensity_index": item.get("intensity", {}).get("index"),
             "_ingested_at": ingested_at,
             "load_date": load_date,
-        })
+        }
+        for item in rows
+    ]
     pdf = pd.DataFrame(records)
     sdf = spark.createDataFrame(pdf)
     (

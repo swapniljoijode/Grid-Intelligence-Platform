@@ -4,27 +4,17 @@
 #
 # Fetches EIA hourly demand and generation for ERCOT, appends to Bronze
 # Delta tables partitioned by load_date, and advances the watermark.
+# Dependencies: requests, pandas — both pre-installed in Fabric PySpark runtime.
 
 import logging
 import os
-import subprocess
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-subprocess.run(
-    ["pip", "install", "--quiet", "requests==2.32.3", "tenacity==9.0.0"],
-    check=True,
-)
-
-import requests  # noqa: E402
-from tenacity import (  # noqa: E402
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-import pandas as pd  # noqa: E402
-from pyspark.sql import SparkSession  # noqa: E402
+import requests
+import pandas as pd
+from pyspark.sql import SparkSession
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -32,28 +22,30 @@ spark = SparkSession.builder.getOrCreate()
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
 try:
-    from notebookutils import mssparkutils  # available inside Fabric
-    _kv_uri = os.environ.get("KEY_VAULT_URI", "https://gip-kv-sj.vault.azure.net/")
-    EIA_API_KEY = mssparkutils.credentials.getSecret(_kv_uri, "eia-api-key")
+    from notebookutils import mssparkutils
+    _kv = os.environ.get("KEY_VAULT_URI", "https://gip-kv-sj.vault.azure.net/")
+    EIA_API_KEY = mssparkutils.credentials.getSecret(_kv, "eia-api-key")
 except Exception:
     EIA_API_KEY = os.environ["EIA_API_KEY"]
 
-# ── EIA HTTP helper ───────────────────────────────────────────────────────────
+# ── HTTP helper with exponential back-off ────────────────────────────────────
 EIA_BASE = "https://api.eia.gov/v2"
 DEMAND_URL = f"{EIA_BASE}/electricity/rto/region-data/data/"
 GENERATION_URL = f"{EIA_BASE}/electricity/rto/fuel-type-data/data/"
 PAGE_SIZE = 5_000
 
 
-@retry(
-    retry=retry_if_exception_type(requests.HTTPError),
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
-)
-def _http_get(url: str, params: dict) -> dict:
-    resp = requests.get(url, params=params, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+def _http_get(url: str, params: dict, max_attempts: int = 5) -> dict:
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.get(url, params=params, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.HTTPError:
+            if attempt == max_attempts - 1:
+                raise
+            time.sleep(min(2 ** attempt, 30))
+    raise RuntimeError("unreachable")
 
 
 def _paginate(url: str, base_params: dict) -> list[dict]:
@@ -72,28 +64,20 @@ def _paginate(url: str, base_params: dict) -> list[dict]:
 
 def fetch_demand(start: str, end: str, respondent: str = "ERCO") -> list[dict]:
     return _paginate(DEMAND_URL, {
-        "api_key": EIA_API_KEY,
-        "frequency": "hourly",
-        "data[0]": "value",
-        "facets[respondent][]": respondent,
-        "start": start,
-        "end": end,
-        "sort[0][column]": "period",
-        "sort[0][direction]": "asc",
+        "api_key": EIA_API_KEY, "frequency": "hourly",
+        "data[0]": "value", "facets[respondent][]": respondent,
+        "start": start, "end": end,
+        "sort[0][column]": "period", "sort[0][direction]": "asc",
         "length": PAGE_SIZE,
     })
 
 
 def fetch_generation(start: str, end: str, respondent: str = "ERCO") -> list[dict]:
     return _paginate(GENERATION_URL, {
-        "api_key": EIA_API_KEY,
-        "frequency": "hourly",
-        "data[0]": "value",
-        "facets[respondent][]": respondent,
-        "start": start,
-        "end": end,
-        "sort[0][column]": "period",
-        "sort[0][direction]": "asc",
+        "api_key": EIA_API_KEY, "frequency": "hourly",
+        "data[0]": "value", "facets[respondent][]": respondent,
+        "start": start, "end": end,
+        "sort[0][column]": "period", "sort[0][direction]": "asc",
         "length": PAGE_SIZE,
     })
 
@@ -122,13 +106,13 @@ lookback = (now - timedelta(hours=48)).strftime("%Y-%m-%dT%H")
 ingested_at = now.isoformat()
 load_date = now.strftime("%Y-%m-%d")
 
-for label, url_func, wm_name, table_name in [
-    ("demand", fetch_demand, "eia_demand.txt", "eia_demand_raw"),
+for label, fetch_fn, wm_name, table_name in [
+    ("demand",     fetch_demand,     "eia_demand.txt",     "eia_demand_raw"),
     ("generation", fetch_generation, "eia_generation.txt", "eia_generation_raw"),
 ]:
     start = _load_wm(wm_name) or lookback
     log.info("Fetching EIA %s from %s to %s", label, start, end_str)
-    rows = url_func(start, end_str)
+    rows = fetch_fn(start, end_str)
     log.info("Fetched %d %s rows", len(rows), label)
 
     if rows:

@@ -2,29 +2,19 @@
 # Attach: bronze-lakehouse (default lakehouse for this notebook)
 # Schedule: hourly via Data Factory pipeline
 #
-# Fetches Open-Meteo hourly weather (archive + forecast) for Austin TX
-# (ERCOT proxy). Deduplicates boundary overlap by timestamp before writing.
+# Fetches Open-Meteo hourly weather for Austin TX (ERCOT proxy).
+# Routes to archive for past dates, forecast for future; deduplicates boundary.
+# Dependencies: requests, pandas — both pre-installed in Fabric PySpark runtime.
 
 import logging
 import os
-import subprocess
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-subprocess.run(
-    ["pip", "install", "--quiet", "requests==2.32.3", "tenacity==9.0.0"],
-    check=True,
-)
-
-import requests  # noqa: E402
-from tenacity import (  # noqa: E402
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-import pandas as pd  # noqa: E402
-from pyspark.sql import SparkSession  # noqa: E402
+import requests
+import pandas as pd
+from pyspark.sql import SparkSession
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -33,31 +23,32 @@ spark = SparkSession.builder.getOrCreate()
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 HOURLY_VARS = "temperature_2m,wind_speed_10m,precipitation,weather_code"
-LATITUDE = 30.2672   # Austin, TX
-LONGITUDE = -97.7431
+LATITUDE, LONGITUDE = 30.2672, -97.7431
 
 
-@retry(
-    retry=retry_if_exception_type(requests.HTTPError),
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=2, max=30),
-)
-def _http_get(url: str, params: dict) -> dict:
-    resp = requests.get(url, params=params, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
+def _http_get(url: str, params: dict, max_attempts: int = 5) -> dict:
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.get(url, params=params, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.HTTPError:
+            if attempt == max_attempts - 1:
+                raise
+            time.sleep(min(2 ** attempt, 30))
+    raise RuntimeError("unreachable")
 
 
 def _parse_hourly(body: dict) -> list[dict]:
-    hourly = body.get("hourly", {})
-    times = hourly.get("time", [])
+    h = body.get("hourly", {})
+    times = h.get("time", [])
     return [
         {
             "time": t,
-            "temperature_2m": hourly.get("temperature_2m", [None] * len(times))[i] or 0.0,
-            "wind_speed_10m": hourly.get("wind_speed_10m", [None] * len(times))[i] or 0.0,
-            "precipitation": hourly.get("precipitation", [None] * len(times))[i] or 0.0,
-            "weather_code": hourly.get("weather_code", [None] * len(times))[i],
+            "temperature_2m": (h.get("temperature_2m") or [None] * len(times))[i] or 0.0,
+            "wind_speed_10m": (h.get("wind_speed_10m") or [None] * len(times))[i] or 0.0,
+            "precipitation": (h.get("precipitation") or [None] * len(times))[i] or 0.0,
+            "weather_code": (h.get("weather_code") or [None] * len(times))[i],
         }
         for i, t in enumerate(times)
     ]
@@ -66,22 +57,21 @@ def _parse_hourly(body: dict) -> list[dict]:
 def fetch_weather(start_date: str, end_date: str) -> list[dict]:
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     common = {"latitude": LATITUDE, "longitude": LONGITUDE, "hourly": HOURLY_VARS}
-    rows: list[dict] = []
-    seen: set[str] = set()
+    rows, seen = [], set()
 
     if start_date <= yesterday:
-        arc_end = min(end_date, yesterday)
-        body = _http_get(ARCHIVE_URL, {**common, "start_date": start_date, "end_date": arc_end})
-        for r in _parse_hourly(body):
+        for r in _parse_hourly(_http_get(ARCHIVE_URL, {
+            **common, "start_date": start_date, "end_date": min(end_date, yesterday)
+        })):
             if r["time"] not in seen:
                 rows.append(r)
                 seen.add(r["time"])
 
     if end_date > yesterday:
-        fc_start = max(start_date, yesterday)
-        body = _http_get(FORECAST_URL, {**common, "start_date": fc_start, "end_date": end_date,
-                                         "forecast_days": 3})
-        for r in _parse_hourly(body):
+        for r in _parse_hourly(_http_get(FORECAST_URL, {
+            **common, "start_date": max(start_date, yesterday),
+            "end_date": end_date, "forecast_days": 3
+        })):
             if r["time"] not in seen:
                 rows.append(r)
                 seen.add(r["time"])
@@ -110,12 +100,7 @@ def _save_wm(value: str) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 now = datetime.now(timezone.utc)
 wm = _load_wm()
-
-if wm:
-    start_date = wm
-else:
-    start_date = (now - timedelta(days=3)).strftime("%Y-%m-%d")
-
+start_date = wm or (now - timedelta(days=3)).strftime("%Y-%m-%d")
 end_date = (now + timedelta(days=1)).strftime("%Y-%m-%d")
 ingested_at = now.isoformat()
 load_date = now.strftime("%Y-%m-%d")
@@ -136,7 +121,6 @@ if rows:
         .saveAsTable("weather_raw")
     )
     log.info("Wrote %d rows to bronze.weather_raw", len(rows))
-    latest_date = max(r["time"][:10] for r in rows)
-    _save_wm(latest_date)
+    _save_wm(max(r["time"][:10] for r in rows))
 else:
     log.info("No new weather rows — watermark unchanged")

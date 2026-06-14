@@ -41,6 +41,13 @@ from typing import Literal
 import requests
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 
+# Load .env for local dev (no-op when vars are already set by CI or the shell)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env", override=False)
+except ImportError:
+    pass
+
 FABRIC_API = "https://api.fabric.microsoft.com/v1"
 FABRIC_SCOPE = "https://api.fabric.microsoft.com/.default"
 REPO_ROOT = Path(__file__).parent.parent
